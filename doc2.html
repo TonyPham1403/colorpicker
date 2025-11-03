@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Box + Overlay — Blend Result</title>
+    <style>
+        /* Giữ nguyên style của bạn */
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto;
+            background: #f6f7fb;
+            color: #111;
+            padding: 24px
+        }
+
+        .wrap {
+            display: flex;
+            gap: 20px
+        }
+
+        .panel {
+            background: white;
+            padding: 14px;
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(20, 20, 40, 0.06)
+        }
+
+        .stage {
+            width: 320px;
+            height: 320px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            isolation: isolate
+        }
+
+        .base,
+        .overlay {
+            position: absolute;
+            inset: 0
+        }
+
+        .overlay {
+            pointer-events: none
+        }
+
+        .controls {
+            display: grid;
+            gap: 10px;
+            min-width: 360px
+        }
+
+        .color-group {
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 8px
+        }
+
+        .color-group h3 {
+            font-size: 14px;
+            margin: 0 0 4px
+        }
+
+        .row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 13px;
+            flex-wrap: wrap
+        }
+
+        .row input[type=text] {
+            width: 100px;
+            font-size: 13px;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px
+        }
+
+        .row input[type=color] {
+            width: 36px;
+            height: 28px;
+            border: none;
+            background: none
+        }
+
+        .result {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start
+        }
+
+        .sample {
+            width: 64px;
+            height: 64px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            position: relative;
+            overflow: hidden
+        }
+
+        .mode-section {
+            margin-top: 6px
+        }
+
+        .mode-section h4 {
+            font-size: 13px;
+            margin: 6px 0 3px;
+            color: #444
+        }
+
+        .mode-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px
+        }
+
+        button.mode {
+            padding: 5px 9px;
+            font-size: 12px;
+            border: none;
+            border-radius: 5px;
+            background: #eee;
+            cursor: pointer;
+            transition: background .15s, transform .1s;
+            position: relative
+        }
+
+        button.mode:hover {
+            background: #ccc;
+            transform: translateY(-1px)
+        }
+
+        button.mode.active {
+            background: #0078ff;
+            color: white
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 5px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .15s
+        }
+
+        button.mode:hover .tooltip {
+            opacity: 1
+        }
+
+        .result-values {
+            font-size: 13px;
+            color: #444;
+            display: flex;
+            flex-direction: column;
+            gap: 2px
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Box + Overlay — Blend Result</h1>
+    <div class="wrap">
+        <div class="panel">
+            <div class="stage">
+                <div class="base" id="base"></div>
+                <div class="overlay" id="overlay"></div>
+            </div>
+        </div>
+
+        <div class="panel controls">
+            <div class="row color-pair">
+                <div class="color-group">
+                    <h3>Base color</h3>
+                    <div class="row"><span>Pick</span><input type="color" id="basePicker" value="#ff7f50"></div>
+                    <div class="row"><span>HEX</span><input type="text" id="baseHex" value="#ff7f50"></div>
+                    <div class="row"><span>RGB</span><input type="text" id="baseRgb" value="255,127,80"></div>
+                    <div class="row"><span>HSL</span><input type="text" id="baseHsl" value="16,100%,66%"></div>
+                </div>
+                <div class="color-group">
+                    <h3>Overlay color</h3>
+                    <div class="row"><span>Pick</span><input type="color" id="ovPicker" value="#4aa3ff"></div>
+                    <div class="row"><span>HEX</span><input type="text" id="ovHex" value="#4aa3ff"></div>
+                    <div class="row"><span>RGB</span><input type="text" id="ovRgb" value="74,163,255"></div>
+                    <div class="row"><span>HSL</span><input type="text" id="ovHsl" value="210,100%,64%"></div>
+                </div>
+            </div>
+
+            <div class="row">
+                <span>Overlay opacity</span>
+                <input type="range" id="opacity" min="0" max="1" step="0.01" value="0.8">
+                <span id="opVal">0.8</span>
+            </div>
+
+            <div class="color-group">
+                <h3>Blend modes</h3>
+                <div id="modeGroups"></div>
+            </div>
+
+            <div class="result">
+                <div>
+                    <div style="font-size:13px; color:#666">Result (visual)</div>
+                    <div class="sample" id="visual"></div>
+                </div>
+                <div class="result-values" id="resultValues"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const base = document.getElementById('base');
+        const overlay = document.getElementById('overlay');
+        const visual = document.getElementById('visual');
+        const opacityInput = document.getElementById('opacity');
+        const opVal = document.getElementById('opVal');
+        const resultValues = document.getElementById('resultValues');
+        let currentBlend = 'normal';
+
+        const ids = {
+            base: { pick: 'basePicker', hex: 'baseHex', rgb: 'baseRgb', hsl: 'baseHsl' },
+            overlay: { pick: 'ovPicker', hex: 'ovHex', rgb: 'ovRgb', hsl: 'ovHsl' }
+        };
+
+        const modeGroups = {
+            "Cơ bản": { "normal": "Không pha trộn", "multiply": "Nhân màu", "screen": "Đảo multiply", "overlay": "Kết hợp multiply + screen" },
+            "Sáng/Tối": { "darken": "Giữ phần tối hơn", "lighten": "Giữ phần sáng hơn" },
+            "Tương phản": { "color-dodge": "Làm sáng mạnh", "color-burn": "Làm tối mạnh", "hard-light": "Giống overlay đảo vai", "soft-light": "Dịu hơn" },
+            "Khác biệt": { "difference": "Trừ RGB", "exclusion": "Nhẹ hơn difference" },
+            "Thành phần màu": { "hue": "Giữ hue lớp trên", "saturation": "Giữ saturation lớp trên", "color": "Hue+Sat lớp trên", "luminosity": "Giữ lightness lớp trên" }
+        };
+
+        // -------- Color conversions ----------
+        function hexToRgb(hex) { hex = hex.replace('#', ''); if (hex.length === 3) hex = hex.split('').map(c => c + c).join(''); return [parseInt(hex.substr(0, 2), 16), parseInt(hex.substr(2, 2), 16), parseInt(hex.substr(4, 2), 16)]; }
+        function rgbToHex(r, g, b) { return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join(''); }
+        function rgbToHsl(r, g, b) { r /= 255; g /= 255; b /= 255; let max = Math.max(r, g, b), min = Math.min(r, g, b), h, s, l = (max + min) / 2; if (max === min) { h = s = 0; } else { let d = max - min; s = l > 0.5 ? d / (2 - max - min) : d / (max + min); switch (max) { case r: h = (g - b) / d + (g < b ? 6 : 0); break; case g: h = (b - r) / d + 2; break; case b: h = (r - g) / d + 4; break; }h /= 6; } return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)]; }
+
+        // -------- Blend formulas ----------
+        function blendChannel(b, o, mode) {
+            b /= 255; o /= 255;
+            let r;
+            switch (mode) {
+                case "multiply": r = b * o; break;
+                case "screen": r = 1 - (1 - b) * (1 - o); break;
+                case "overlay": r = b < 0.5 ? (2 * b * o) : (1 - 2 * (1 - b) * (1 - o)); break;
+                case "darken": r = Math.min(b, o); break;
+                case "lighten": r = Math.max(b, o); break;
+                case "difference": r = Math.abs(b - o); break;
+                case "exclusion": r = b + o - 2 * b * o; break;
+                case "color-dodge": r = (o === 1) ? 1 : Math.min(1, b / (1 - o)); break;
+                case "color-burn": r = (o === 0) ? 0 : 1 - Math.min(1, (1 - b) / o); break;
+                case "hard-light": r = o < 0.5 ? 2 * b * o : 1 - 2 * (1 - b) * (1 - o); break;
+                case "soft-light": r = (1 - 2 * o) * b * b + 2 * o * b; break;
+                default: r = o; break;
+            }
+            return Math.round(r * 255);
+        }
+        function blendRGB(base, over, mode, alpha) {
+            let [r1, g1, b1] = base, [r2, g2, b2] = over;
+            let R = blendChannel(r1, r2, mode);
+            let G = blendChannel(g1, g2, mode);
+            let B = blendChannel(b1, b2, mode);
+            // combine with opacity
+            R = Math.round(r1 * (1 - alpha) + R * alpha);
+            G = Math.round(g1 * (1 - alpha) + G * alpha);
+            B = Math.round(b1 * (1 - alpha) + B * alpha);
+            return [R, G, B];
+        }
+
+        // -------- Core updates ----------
+        function syncColor(which, changed) {
+            const set = ids[which];
+            const pick = document.getElementById(set.pick),
+                hex = document.getElementById(set.hex),
+                rgb = document.getElementById(set.rgb),
+                hsl = document.getElementById(set.hsl);
+            let r, g, b;
+            if (changed === 'hex' || changed === 'pick') { [r, g, b] = hexToRgb(changed === 'pick' ? pick.value : hex.value); }
+            else if (changed === 'rgb') { [r, g, b] = rgb.value.split(',').map(x => +x.trim()); }
+            else { let [H, S, L] = hsl.value.replace(/%/g, '').split(',').map(x => +x.trim());[r, g, b] = hslToRgb(H, S, L); }
+            const newHex = rgbToHex(r, g, b); const [H, S, L] = rgbToHsl(r, g, b);
+            pick.value = newHex; hex.value = newHex; rgb.value = `${r},${g},${b}`; hsl.value = `${H},${S}%,${L}%`;
+            applyColors();
+        }
+        function applyColors() {
+            const baseHex = document.getElementById(ids.base.hex).value;
+            const ovHex = document.getElementById(ids.overlay.hex).value;
+            const op = parseFloat(opacityInput.value);
+            const b = hexToRgb(baseHex), o = hexToRgb(ovHex);
+            base.style.background = baseHex;
+            overlay.style.background = ovHex;
+            overlay.style.opacity = op;
+            overlay.style.mixBlendMode = currentBlend;
+
+            visual.innerHTML = "";
+            const layer = document.createElement("div");
+            layer.style.position = "absolute";
+            layer.style.inset = "0";
+            layer.style.background = ovHex;
+            layer.style.opacity = op;
+            layer.style.mixBlendMode = currentBlend;
+            visual.style.background = baseHex;
+            visual.appendChild(layer);
+            opVal.textContent = op.toFixed(2);
+
+            // ✅ compute real blended result
+            const res = blendRGB(b, o, currentBlend, op);
+            const hex = rgbToHex(...res);
+            const [H, S, L] = rgbToHsl(...res);
+            resultValues.innerHTML = `
+   <div>HEX: ${hex}</div>
+   <div>RGB: ${res.join(',')}</div>
+   <div>HSL: ${H},${S}%,${L}%</div>
+ `;
+        }
+
+        // -------- Build buttons ----------
+        const modeGroupContainer = document.getElementById("modeGroups");
+        for (const [g, modes] of Object.entries(modeGroups)) {
+            const sec = document.createElement("div");
+            sec.className = "mode-section";
+            sec.innerHTML = `<h4>${g}</h4>`;
+            const wrap = document.createElement("div");
+            wrap.className = "mode-buttons";
+            for (const [mode, tip] of Object.entries(modes)) {
+                const btn = document.createElement("button");
+                btn.className = "mode";
+                btn.textContent = mode;
+                if (mode === currentBlend) btn.classList.add("active");
+                const tipDiv = document.createElement("div");
+                tipDiv.className = "tooltip"; tipDiv.textContent = tip;
+                btn.appendChild(tipDiv);
+                btn.addEventListener("mouseenter", () => overlay.style.mixBlendMode = mode);
+                btn.addEventListener("mouseleave", () => overlay.style.mixBlendMode = currentBlend);
+                btn.addEventListener("click", () => {
+                    currentBlend = mode;
+                    document.querySelectorAll(".mode").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    applyColors();
+                });
+                wrap.appendChild(btn);
+            }
+            sec.appendChild(wrap);
+            modeGroupContainer.appendChild(sec);
+        }
+
+        // Events
+        for (const which of ['base', 'overlay']) {
+            const set = ids[which];
+            for (const key in set) {
+                const el = document.getElementById(set[key]);
+                el.addEventListener('input', () => syncColor(which, key));
+            }
+        }
+        opacityInput.addEventListener('input', applyColors);
+        applyColors();
+    </script>
+</body>
+
+</html>
